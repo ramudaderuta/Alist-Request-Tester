@@ -1,82 +1,109 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>网站测试工具</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/layui-v2.5.7/dist/css/layui.css">
-    <style>
-        body { padding: 20px; }
-        #resultTable { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        #resultTable th, #resultTable td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        #resultTable tr:nth-child(even) { background-color: #f2f2f2; }
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/layui@2.6.8/dist/css/layui.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/layui@2.6.8/dist/layui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
+    <div class="layui-container" style="margin-top: 20px;">
+        <h2 class="layui-text">网站测试工具</h2>
+        <div class="layui-form">
+            <div class="layui-form-item layui-form-text">
+                <label class="layui-form-label">输入网址</label>
+                <div class="layui-input-block">
+                    <textarea id="urlInput" placeholder="请输入网址，每行一个" class="layui-textarea"></textarea>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <div class="layui-input-block">
+                    <button class="layui-btn" lay-submit lay-filter="formDemo" onclick="testUrls()">开始测试</button>
+                </div>
+            </div>
+        </div>
+        <table id="resultTable" class="layui-table" style="display: none;">
+            <colgroup>
+                <col width="70%">
+                <col width="30%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>有效网址</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
 
-<div class="layui-form">
-    <label for="urls">请输入或粘贴多个网址（每行一个）:</label>
-    <textarea id="urls" class="layui-textarea" style="height: 150px;"></textarea>
-    <button type="button" class="layui-btn layui-btn-normal" onclick="testWebsites()">开始测试</button>
-</div>
-
-<table id="resultTable" class="layui-hide">
-    <thead>
-        <tr>
-            <th>URL</th>
-            <th>状态</th>
-            <th>操作</th>
-        </tr>
-    </thead>
-    <tbody id="resultsBody"></tbody>
-</table>
-
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/layui-v2.5.7/dist/layui.js"></script>
-<script>
-const validUrlPattern = /^http:\/\/[a-zA-Z0-9.-]+:\d+$/;
-
-function testWebsites() {
-    const urls = document.getElementById('urls').value.split('\n');
-    const resultsBody = document.getElementById('resultsBody');
-    resultsBody.innerHTML = ''; // 清空旧的结果
-
-    urls.forEach(url => {
-        if (validUrlPattern.test(url.trim())) {
-            axios.post(url + '/api/fs/list', {}, { timeout: 3000 })
-                .then(response => {
-                    if (response.status === 200 && response.data.code === 200) {
-                        addResult(url, '成功', true);
-                    } else {
-                        addResult(url, '失败：' + JSON.stringify(response.data), false);
-                    }
-                })
-                .catch(error => {
-                    console.error(`Error testing ${url}:`, error);
-                    addResult(url, '超时或错误', false);
+    <script>
+        layui.use(['layer', 'table'], function(){
+            var layer = layui.layer;
+            var table = layui.table;
+            
+            window.testUrls = function() {
+                var urlInput = document.getElementById('urlInput');
+                var urls = urlInput.value.split('\n').filter(url => url.trim() !== '');
+                
+                var validUrls = urls.filter(url => {
+                    return /^http:\/\/[^:]+:\d+$/.test(url);
                 });
-        } else {
-            addResult(url, '无效格式', false);
-        }
-    });
-}
 
-function addResult(url, status, success) {
-    const row = `<tr>
-                    <td>${url}</td>
-                    <td>${status}</td>
-                    <td><button class="layui-btn layui-btn-sm ${success ? 'layui-btn-normal' : 'layui-btn-danger'}" onclick="copyToClipboard('${url}')">复制</button></td>
-                  </tr>`;
-    document.getElementById('resultsBody').insertAdjacentHTML('beforeend', row);
-}
+                if (validUrls.length === 0) {
+                    layer.msg('没有找到有效的URL格式');
+                    return;
+                }
 
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        layer.msg('已复制到剪贴板');
-    }, err => {
-        console.error('无法复制文本: ', err);
-    });
-}
-</script>
+                var resultTable = document.getElementById('resultTable');
+                var tbody = resultTable.querySelector('tbody');
+                tbody.innerHTML = '';
 
+                validUrls.forEach(url => {
+                    testUrl(url).then(result => {
+                        if (result) {
+                            var row = tbody.insertRow();
+                            var cell1 = row.insertCell(0);
+                            var cell2 = row.insertCell(1);
+                            cell1.textContent = url;
+                            cell2.innerHTML = '<button class="layui-btn layui-btn-xs" onclick="copyUrl(\'' + url + '\')">复制</button>';
+                        }
+                    });
+                });
+
+                resultTable.style.display = 'table';
+            }
+
+            window.copyUrl = function(url) {
+                navigator.clipboard.writeText(url).then(function() {
+                    layer.msg('复制成功');
+                }, function(err) {
+                    layer.msg('复制失败: ' + err);
+                });
+            }
+
+            async function testUrl(url) {
+                try {
+                    const response = await axios.post(url + '/api/fs/list', {}, {
+                        timeout: 3000,
+                        headers: {
+                            'User-Agent': 'curl/8.8.0',
+                            'Accept': '*/*'
+                        }
+                    });
+                    
+                    if (response.status === 200 && response.data.code === 200) {
+                        return true;
+                    }
+                } catch (error) {
+                    console.error('Error testing URL:', url, error);
+                }
+                return false;
+            }
+        });
+    </script>
 </body>
 </html>
