@@ -21,23 +21,26 @@
             <div class="layui-form-item">
                 <div class="layui-input-block">
                     <button class="layui-btn" lay-submit lay-filter="formDemo" onclick="testUrls()">开始测试</button>
+                    <button class="layui-btn layui-btn-normal" onclick="copyAllUrls()">复制全部有效网址</button>
                 </div>
             </div>
         </div>
-        <table id="resultTable" class="layui-table" style="display: none;">
-            <colgroup>
-                <col width="70%">
-                <col width="30%">
-            </colgroup>
-            <thead>
-                <tr>
-                    <th>有效网址</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
+        <div id="resultArea" style="display: none;">
+            <table id="resultTable" class="layui-table">
+                <colgroup>
+                    <col width="70%">
+                    <col width="30%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>有效网址</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -45,13 +48,19 @@
             var layer = layui.layer;
             var table = layui.table;
             
+            window.validUrlSet = new Set();
+
             window.testUrls = function() {
                 var urlInput = document.getElementById('urlInput');
                 var urls = urlInput.value.split('\n').filter(url => url.trim() !== '');
                 
-                var validUrls = urls.filter(url => {
-                    return /^http:\/\/[^:]+:\d+$/.test(url);
-                });
+                var validUrls = urls.map(url => {
+                    url = url.replace(/\/$/, '');
+                    if (/^(http|https):\/\/[^:]+:\d+$/.test(url)) {
+                        return url;
+                    }
+                    return null;
+                }).filter(url => url !== null);
 
                 if (validUrls.length === 0) {
                     layer.msg('没有找到有效的URL格式');
@@ -62,24 +71,42 @@
                 var tbody = resultTable.querySelector('tbody');
                 tbody.innerHTML = '';
 
-                validUrls.forEach(url => {
-                    testUrl(url).then(result => {
-                        if (result) {
-                            var row = tbody.insertRow();
-                            var cell1 = row.insertCell(0);
-                            var cell2 = row.insertCell(1);
-                            cell1.textContent = url;
-                            cell2.innerHTML = '<button class="layui-btn layui-btn-xs" onclick="copyUrl(\'' + url + '\')">复制</button>';
-                        }
-                    });
+                // 首先显示已存储的有效URL
+                validUrlSet.forEach(url => {
+                    addUrlToTable(url, tbody);
                 });
 
-                resultTable.style.display = 'table';
+                // 然后测试新的URL
+                validUrls.forEach(url => {
+                    if (!validUrlSet.has(url)) {
+                        testUrl(url).then(result => {
+                            if (result) {
+                                validUrlSet.add(url);
+                                addUrlToTable(url, tbody);
+                            }
+                        });
+                    }
+                });
+
+                document.getElementById('resultArea').style.display = 'block';
             }
 
-            window.copyUrl = function(url) {
-                navigator.clipboard.writeText(url).then(function() {
-                    layer.msg('复制成功');
+            function addUrlToTable(url, tbody) {
+                var row = tbody.insertRow();
+                var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(1);
+                cell1.textContent = url;
+                cell2.innerHTML = '<button class="layui-btn layui-btn-xs" onclick="visitUrl(\'' + url + '\')">访问</button>';
+            }
+
+            window.visitUrl = function(url) {
+                window.open(url, '_blank');
+            }
+
+            window.copyAllUrls = function() {
+                var urls = Array.from(validUrlSet).join('\n');
+                navigator.clipboard.writeText(urls).then(function() {
+                    layer.msg('所有有效网址已复制到剪贴板');
                 }, function(err) {
                     layer.msg('复制失败: ' + err);
                 });
@@ -100,6 +127,9 @@
                     }
                 } catch (error) {
                     console.error('Error testing URL:', url, error);
+                    if (error.code === 'ECONNABORTED') {
+                        layer.msg(url + ' 请求超时');
+                    }
                 }
                 return false;
             }
