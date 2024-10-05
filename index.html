@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>网站测试工具</title>
+    <title>Alist响应测试</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/layui@2.6.8/dist/css/layui.min.css">
     <script src="https://cdn.jsdelivr.net/npm/layui@2.6.8/dist/layui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
     <div class="layui-container" style="margin-top: 20px;">
-        <h2 class="layui-text">网站测试工具</h2>
+        <h2 class="layui-text">Alist响应测试</h2>
         <div class="layui-form">
             <div class="layui-form-item layui-form-text">
                 <label class="layui-form-label">输入网址</label>
@@ -25,7 +25,7 @@
                 </div>
             </div>
         </div>
-        <div id="resultArea" style="display: none;">
+        <div id="resultArea">
             <table id="resultTable" class="layui-table">
                 <colgroup>
                     <col width="70%">
@@ -56,7 +56,15 @@
                 
                 var validUrls = urls.map(url => {
                     url = url.replace(/\/$/, '');
-                    if (/^(http|https):\/\/[^:]+:\d+$/.test(url)) {
+
+                    if (/^(http|https):\/\/[^:]+(:\d+)?$/.test(url)) {
+                        if (!/:\d+$/.test(url)) {
+                            if (url.startsWith('http://')) {
+                                url += ':80';
+                            } else if (url.startsWith('https://')) {
+                                url += ':443';
+                            }
+                        }
                         return url;
                     }
                     return null;
@@ -71,12 +79,10 @@
                 var tbody = resultTable.querySelector('tbody');
                 tbody.innerHTML = '';
 
-                // 首先显示已存储的有效URL
                 validUrlSet.forEach(url => {
                     addUrlToTable(url, tbody);
                 });
 
-                // 然后测试新的URL
                 validUrls.forEach(url => {
                     if (!validUrlSet.has(url)) {
                         testUrl(url).then(result => {
@@ -87,8 +93,6 @@
                         });
                     }
                 });
-
-                document.getElementById('resultArea').style.display = 'block';
             }
 
             function addUrlToTable(url, tbody) {
