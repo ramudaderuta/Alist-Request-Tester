@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>网站测试工具</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/layui-v2.5.7/dist/css/layui.css">
+    <style>
+        body { padding: 20px; }
+        #resultTable { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #resultTable th, #resultTable td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #resultTable tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+<div class="layui-form">
+    <label for="urls">请输入或粘贴多个网址（每行一个）:</label>
+    <textarea id="urls" class="layui-textarea" style="height: 150px;"></textarea>
+    <button type="button" class="layui-btn layui-btn-normal" onclick="testWebsites()">开始测试</button>
+</div>
+
+<table id="resultTable" class="layui-hide">
+    <thead>
+        <tr>
+            <th>URL</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+</table>
+
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/layui-v2.5.7/dist/layui.js"></script>
+<script>
+const validUrlPattern = /^http:\/\/[a-zA-Z0-9.-]+:\d+$/;
+
+function testWebsites() {
+    const urls = document.getElementById('urls').value.split('\n');
+    const resultsBody = document.getElementById('resultsBody');
+    resultsBody.innerHTML = ''; // 清空旧的结果
+
+    urls.forEach(url => {
+        if (validUrlPattern.test(url.trim())) {
+            axios.post(url + '/api/fs/list', {}, { timeout: 3000 })
+                .then(response => {
+                    if (response.status === 200 && response.data.code === 200) {
+                        addResult(url, '成功', true);
+                    } else {
+                        addResult(url, '失败：' + JSON.stringify(response.data), false);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error testing ${url}:`, error);
+                    addResult(url, '超时或错误', false);
+                });
+        } else {
+            addResult(url, '无效格式', false);
+        }
+    });
+}
+
+function addResult(url, status, success) {
+    const row = `<tr>
+                    <td>${url}</td>
+                    <td>${status}</td>
+                    <td><button class="layui-btn layui-btn-sm ${success ? 'layui-btn-normal' : 'layui-btn-danger'}" onclick="copyToClipboard('${url}')">复制</button></td>
+                  </tr>`;
+    document.getElementById('resultsBody').insertAdjacentHTML('beforeend', row);
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        layer.msg('已复制到剪贴板');
+    }, err => {
+        console.error('无法复制文本: ', err);
+    });
+}
+</script>
+
+</body>
+</html>
